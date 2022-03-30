@@ -72,6 +72,7 @@ object Tabletest {
           println("Are you sure?\n[y] [n]")
           if(readLine().toLowerCase() =="y"){loop = false;state=states.done}
         }
+        case _ =>
       }
     }while(loop)
 
@@ -134,24 +135,24 @@ object Tabletest {
     users.createOrReplaceTempView("tmpusers")
 
     spark.sql("DROP TABLE IF EXISTS games")
-    spark.sql("CREATE TABLE games(gameid Int, name String, release_date Date, metacritic Int, esrb String) " +
+    spark.sql("CREATE EXTERNAL TABLE games(gameid Int, name String, release_date Date, metacritic Int, esrb String) " +
       "PARTITIONED BY (generation Int,platform String) LOCATION 'hdfs://localhost:9000/user/hive/warehouse/gamesdb/games'")
     spark.sql("INSERT INTO games(SELECT gameid,name,release_date,metacritic,esrb,generation,platform FROM tmpgames)")
     spark.sql("DROP TABLE IF EXISTS genres")
-    spark.sql("CREATE TABLE genres(genreid Int, name String) LOCATION 'hdfs://localhost:9000/user/hive/warehouse/gamesdb/genres'")
+    spark.sql("CREATE EXTERNAL TABLE genres(genreid Int, name String) LOCATION 'hdfs://localhost:9000/user/hive/warehouse/gamesdb/genres'")
     spark.sql("INSERT INTO genres(SELECT genreid,name FROM tmpge)")
     spark.sql("DROP TABLE IF EXISTS genrelinks")
-    spark.sql("CREATE TABLE genrelinks(gameid Int,genreid Int) LOCATION 'hdfs://localhost:9000/user/hive/warehouse/gamesdb/genrelinks'")
+    spark.sql("CREATE EXTERNAL TABLE genrelinks(gameid Int,genreid Int) LOCATION 'hdfs://localhost:9000/user/hive/warehouse/gamesdb/genrelinks'")
     spark.sql("INSERT INTO genrelinks(SELECT gameid,genreid FROM tmpgl)")
     spark.sql("DROP TABLE IF EXISTS platforms")
-    spark.sql("CREATE TABLE platforms(platformid Int,parent_platformid Int,name String,games_count Int, " +
+    spark.sql("CREATE EXTERNAL TABLE platforms(platformid Int,parent_platformid Int,name String,games_count Int, " +
       "generation Int,start_date Int,end_date Int) LOCATION 'hdfs://localhost:9000/user/hive/warehouse/gamesdb/platforms'")
     spark.sql("INSERT INTO platforms(SELECT platformid,parent_platformid,name,games_count," +
       "generation,start_date,end_date FROM tmpplatforms)")
     spark.sql("DROP TABLE IF EXISTS users")
-    spark.sql("CREATE TABLE users(userid Int,username String, password String) LOCATION 'hdfs://localhost:9000/user/hive/warehouse/gamesdb/users'")
+    spark.sql("CREATE EXTERNAL TABLE users(userid Int,username String, password String) LOCATION 'hdfs://localhost:9000/user/hive/warehouse/gamesdb/users'")
     spark.sql("INSERT INTO users(SELECT userid,username,password FROM tmpusers)")
-    spark.sql("SELECT * FROM games").show()
+    //spark.sql("SELECT * FROM games").show()
 
 
   }
@@ -222,6 +223,7 @@ object Tabletest {
     println("[0] Change user info\n[1] Average Review Scores Per System\n[2] Number of multiplatform games per system\n" +
       "[3] Number of exclusives per system\n[4] Games released per system per year\n" +
       "[5] Average releases per year per system\n[6] Highest rated games per genre\n[logout]")
+    if(currentUserRole=="admin")println("[pull]Pull data from API")
     val line2 = readLine()
     line2 match {
       case "add" => if(currentUserRole=="admin")AddUser(spark:SparkSession)
@@ -233,6 +235,7 @@ object Tabletest {
       case "5" => Query5(spark)
       case "6" => Query6(spark)
       case "logout" => state=states.logOut
+      case "pull" => if(currentUserRole=="admin") ReadTables(spark)
       case _ =>
     }
   }
