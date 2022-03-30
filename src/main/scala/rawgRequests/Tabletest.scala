@@ -3,20 +3,40 @@ package rawgRequests
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.{SparkConf, sql}
+import rawgRequests.states.states
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.FileSystem
+import org.apache.spark.sql.functions.{col, when}
+
 import scala.io.StdIn.readLine
 import scala.util.Random
-
 import java.io.File
+import scala.language.postfixOps
+
+object states extends Enumeration{
+  type states = Value
+
+  val main = Value(0)
+  val logIn = Value(1)
+  val logOut = Value(3)
+  val page = Value(4)
+  val newUser = Value(5)
+  val changeInfo = Value(6)
+  val shutdown = Value(7)
+  val done = Value(8)
+
+}
 
 object Tabletest {
   var currentUserName = ""
   var currentUserRole = ""
+  var currentUserPassword = ""
+  var state = states.main
+
   def main(args: Array[String]): Unit = {
     System.setProperty("hadoop.home.dir", "C:\\hadoop")
-    Logger.getLogger("org").setLevel(Level.ERROR)
-
     val conf = new SparkConf()
-
+    Logger.getLogger("org").setLevel(Level.OFF)
     val spark = SparkSession
       .builder()
       .appName("api test")
@@ -27,78 +47,45 @@ object Tabletest {
       .getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
     spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
-    var loop = true
-    do {
-      try {
-        println("Please select an option:\n[1] Log In\n[2] New User\n[3] Shutdown")
-        val line = readLine()
 
-        line match {
-          case "1" => {
-            if (LogIn(spark)) {
-              do {
-                println("[1][2][3][4][5][6][change]")
-                val line2 = readLine()
-                line2 match {
-                  case "1" => Query1(spark)
-                  case "2" => Query2(spark)
-                  case "3" => Query3(spark)
-                  case "4" => Query4(spark)
-                  case "5" => Query5(spark)
-                  case "exit" => loop = false
-                }
-              } while (loop)
-              loop = true
-            }
-            //if login good show rest
-          }
-          case "2" => AddUser(spark)
-          case "3" => {
-            println("Are you sure? [y][n]")
-            val line2 = readLine()
-            if (line2 == "y") loop = false
-          }
+    import spark.implicits._
+    val a= Seq(("user","password","user"),("admin","adminpassword","admin"),("billy","billypassword","user")).toDF("username","password","role")
+    //val users = spark.sparkContext.parallelize(a)
+    //val us = spark.createDataFrame(users).toDF("username","password","role")
+    a.createOrReplaceTempView("users2")
+    spark.sql("DROP TABLE IF EXISTS users")
+    spark.sql("CREATE TABLE users(username String,password String,role String)")
+    spark.sql("INSERT INTO users (SELECT username,password,role FROM users2)")
+    //val users = spark.read.json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/users").toDF()
+    //users.createOrReplaceTempView("users")
+    var loop = true
+    //UserTable(spark)
+    do{
+      state match{
+        case states.main => MainMenu()
+        case states.logIn => try{state=LogIn(spark:SparkSession)}catch{case _: Exit=>state=states.main}
+        case states.logOut => Logout()
+        case states.newUser => AddUser(spark:SparkSession)
+        //case states.changeInfo =>
+        case states.page => UserPage(spark:SparkSession)
+        case states.shutdown => {
+          println("Are you sure?\n[y] [n]")
+          if(readLine().toLowerCase() =="y"){loop = false;state=states.done}
         }
-      }catch{case _: Exit =>}
+      }
     }while(loop)
 
-
-    //"hdfs://localhost:9000/user/creid/tables/"
-    //val file = new File("testing.json")
-    //val js = ujson.read(file)
-
-    /*spark.sql("DROP TABLE IF EXISTS testing123")
-    val df = spark.sql("SELECT * FROM games").toDF()
-    df.write.partitionBy("generation","platform")
-      .mode("overwrite")
-      .json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/games")
-    val df3 = spark.sql("SELECT * FROM genres").toDF()
-    df3.write.mode("overwrite")
-      .json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/genres")
-    val df4 = spark.sql("SELECT * FROM genrelinks").toDF()
-    df4.write.mode("overwrite")
-      .partitionBy("genreid")
-      .json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/genrelinks")
-    val df5 = spark.sql("SELECT * FROM platforms").toDF()
-    df5.write.mode("overwrite")
-      .json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/platforms")
-    val df2 = spark.read.json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/games").toDF()
-    df2.createOrReplaceTempView("games2")
-    spark.sql("SELECT * FROM games2").show()
-    spark.sql("SELECT COUNT(gameid) FROM games2").show()*/
-
-    //spark.sql("CREATE TABLE users(userid Int,username String,password String)")
-    //spark.sql("INSERT INTO users VALUES(1,\"user\",\"password\")")
-    //spark.sql("INSERT INTO users VALUES(2,\"admin\",\"adminpassword\")")
-    //spark.sql("SELECT * FROM users").show()
-    //val users = spark.sql("SELECT * FROM users").toDF()
-    //users.rdd.foreach(x=>println(x.getString(2)))
-    //users.rdd.collect
-    //users.rdd.toDebugString
-
   }
-
-  def CreateTables(spark: SparkSession): Unit = {
+  def MainMenu(): Unit={
+    println("Please select an option:\n[1] Log In\n[2] New User\n[3] Shutdown")
+    val line = readLine()
+    line match{
+      case "1" => state = states.logIn
+      case "2" => state = states.newUser
+      case "3" => state = states.shutdown
+    }
+  }
+  def CreateTables(spark:SparkSession): Unit = {
     val sc = spark.sparkContext
     val rawg = new Rawg("87941bc8ee064f8f9a94665db098e462")
     val games = sc.parallelize(rawg.GetGames())
@@ -134,7 +121,7 @@ object Tabletest {
     spark.sql("SELECT * FROM genres").show()
     spark.sql("SELECT COUNT(gameid) FROM genrelinks").show()
   }
-  def ReadTables(spark: SparkSession): Unit={
+  def ReadTables(spark:SparkSession): Unit={
     val games = spark.read.json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/games").toDF()
     val genres = spark.read.json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/genres").toDF()
     val genrelinks = spark.read.json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/genrelinks").toDF()
@@ -177,25 +164,31 @@ object Tabletest {
       val pass1 = readLine()
       print("Confirm password: ")
       val pass2 = readLine()
-      if(pass1==pass2){
-        try {
-          val user = spark.sql(s"SELECT * FROM users WHERE username='$name'").toDF()
-          println("User: " + user.collect().array(0).getString(1)+"already exists")
-          println("PLease enter a different username")
-        }
-        catch{
-          case _: ClassCastException =>{
-            val r = Random
-            spark.sql(s"INSERT INTO users(userid,username,password) VALUES(${r.nextInt(1000)}'$name','$pass1')")
-            loop = false
+      if(pass1.equals(pass2)){
+          import spark.implicits._
+          //val users = spark.read.json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/users")
+           // .toDF("username","password","role")
+          val users = spark.sql("SELECT * FROM users").toDF()
+          if(currentUserRole=="admin") {
+            print("Enter role: ")
+            val role = readLine()
+            val user = Seq(name,pass1,role).toDF("username","password","role")
+            user.createOrReplaceTempView("users2")
+            spark.sql("INSERT INTO users( SELECT username,password,role FROM users2)")
           }
-        }
-
+          else {
+            val user = Seq(name,pass1,"user").toDF("username","password","role")
+            user.createOrReplaceTempView("users2")
+            spark.sql("INSERT INTO users( SELECT username,password,role FROM users2)")
+          }
+        loop = false
       }
       else println("Passwords do not match. Make sure they are the same")
     }while(loop)
+    if(currentUserName!="") state=states.page
+    else state=states.main
   }
-  def LogIn(spark:SparkSession): Boolean={
+  def LogIn(spark:SparkSession): states={
     val readmy = () => {val a = readLine();if(a.toLowerCase=="exit") throw Exit()else a}
     var loop = true
     do {
@@ -205,8 +198,11 @@ object Tabletest {
       print("Password: ")
       val line2 = readmy()
       try {
-        val user = spark.sql(s"SELECT * FROM users WHERE username='$line1' AND password='$line2'").toDF()
-        println("Welcome: " + user.collect().array(0).getString(0))
+        val user = spark.sql(s"SELECT * FROM users WHERE username='$line1' AND password='$line2'").toDF("username","password","role")
+        currentUserName = user.collect().array(0).getString(0)
+        currentUserRole = user.collect().array(0).getString(2)
+        currentUserPassword = user.collect().array(0).getString(1)
+        println(s"Welcome: $currentUserName")
         loop = false
       }
       catch{
@@ -215,43 +211,105 @@ object Tabletest {
         }
       }
     }while(loop)
-    true
+    states.page
   }
-
-  def Query1(spark: SparkSession): Unit = {
-    spark.sql("SELECT platform,COUNT(gameid),ROUND(AVG(metacritic)) average FROM games " +
-      "WHERE metacritic != -1 GROUP BY platform ORDER BY average DESC").show()
+  def Logout(): Unit={
+    println("Are you sure you want to logout?\n[y] [n]")
+    if(readLine().toLowerCase=="y"){currentUserName="";currentUserRole="";state=states.main}
+    else state=states.page
   }
-
-  def Query2(spark: SparkSession): Unit = {
+  def UserPage(spark:SparkSession): Unit ={
+    println("[0] Change user info\n[1] Average Review Scores Per System\n[2] Number of multiplatform games per system\n" +
+      "[3] Number of exclusives per system\n[4] Games released per system per year\n" +
+      "[5] Average releases per year per system\n[6] Highest rated games per genre\n[logout]")
+    val line2 = readLine()
+    line2 match {
+      case "add" => if(currentUserRole=="admin")AddUser(spark:SparkSession)
+      case "0" => ChangeInfo(spark)
+      case "1" => Query1(spark)
+      case "2" => Query2(spark)
+      case "3" => Query3(spark)
+      case "4" => Query4(spark)
+      case "5" => Query5(spark)
+      case "6" => Query6(spark)
+      case "logout" => state=states.logOut
+      case _ =>
+    }
+  }
+  def ChangeInfo(spark:SparkSession): Unit={
+    var newName =currentUserName
+    var newPass =currentUserPassword
+    var loop = true
+    do{
+      println(s"Username: $newName\nPassword: $newPass")
+      println("What do you want to change?\n[1] Username\n[2] Password\n[3] Save and Submit")
+      readLine() match{
+        case "1" =>
+          print("Enter new Username: ");newName=readLine()
+        case "2" =>
+          print("Enter new Password: ");newPass=readLine()
+        case "3" =>
+          spark.sql(s"INSERT INTO users Values('$newName','$newPass','$currentUserRole')")
+          currentUserPassword = newPass
+          currentUserName = newName
+            loop = false
+      }
+    }while(loop)
+  }
+  def Query1(spark:SparkSession): Unit = {
+    val q =spark.sql("SELECT platform,COUNT(gameid),ROUND(AVG(metacritic)) average FROM games " +
+      "WHERE metacritic != -1 GROUP BY platform ORDER BY average DESC")
+    q.show()
+    q.write.mode("overwrite")
+      .json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/results/1")
+  }
+  def Query2(spark:SparkSession): Unit = {
     val multiplats = spark.sql("SELECT gameid,COUNT(name) as ports FROM games GROUP BY gameid HAVING COUNT(name) > 1").toDF()
     multiplats.createOrReplaceTempView("multiplats")
-    spark.sql("SELECT platform,COUNT(mp.gameid) multi_platforms FROM games g JOIN multiplats mp ON g.gameid=mp.gameid GROUP BY platform" +
-      " ORDER BY multi_platforms DESC").show()
+    val q=spark.sql("SELECT platform,COUNT(mp.gameid) multi_platforms FROM games g JOIN multiplats mp ON g.gameid=mp.gameid GROUP BY platform" +
+      " ORDER BY multi_platforms DESC")
+    q.show()
+    q.write.mode("overwrite")
+      .json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/results/2")
   }
-
-  def Query3(spark: SparkSession): Unit = {
+  def Query3(spark:SparkSession): Unit = {
     val exclusives = spark.sql("SELECT gameid,COUNT(name) as exclusives FROM games GROUP BY gameid HAVING COUNT(name) =1").toDF()
     exclusives.createOrReplaceTempView("exclusives")
-    spark.sql("SELECT platform,COUNT(mp.gameid) exclusives FROM games g JOIN exclusives mp ON g.gameid=mp.gameid GROUP BY platform" +
-      " ORDER BY exclusives").show()
+    val q=spark.sql("SELECT platform,COUNT(mp.gameid) exclusives FROM games g JOIN exclusives mp ON g.gameid=mp.gameid GROUP BY platform" +
+      " ORDER BY exclusives")
+    q.show()
+    q.write.mode("overwrite")
+      .json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/results/3")
   }
-
-  def Query4(spark: SparkSession): Unit = {
-    spark.sql("SELECT platform,COUNT(gameid) as Released,Year(release_date) as year FROM games " +
+  def Query4(spark:SparkSession): Unit = {
+    val q =spark.sql("SELECT platform,COUNT(gameid) as Released,Year(release_date) as year FROM games " +
       "JOIN platforms plat ON games.platform=plat.name " +
       "WHERE Year(release_date) BETWEEN start AND end "+
       "GROUP BY platform, year " +
-      "ORDER BY year, platform").show()
+      "ORDER BY year, platform")
+    q.show(40)
+    q.write.mode("overwrite")
+      .json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/results/4")
   }
-
-  def Query5(spark: SparkSession): Unit = {
-    spark.sql("SELECT g.platform,ROUND(COUNT(g.name)/(Year(MAX(g.release_date))-Year(MIN(g.release_date)))) AS average_releases_per_year " +
+  def Query5(spark:SparkSession): Unit = {
+    val q=spark.sql("SELECT g.platform,ROUND(COUNT(g.name)/(Year(MAX(g.release_date))-Year(MIN(g.release_date)))) AS average_releases_per_year " +
       "FROM games g JOIN platforms plat ON g.platform=plat.name " +
       "WHERE Year(release_date) BETWEEN start AND end "+
       "GROUP BY platform " +
-      "ORDER BY average_releases_per_year DESC").show()
+      "ORDER BY average_releases_per_year DESC")
+    q.show()
+    q.write.mode("overwrite")
+      .json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/results/5")
   }
-
+  def Query6(spark:SparkSession): Unit={
+    val by_genres = spark.sql("SELECT ge.name as genre,g.name as game,g.metacritic as metacritic FROM games g\nJOIN genrelinks gl ON g.gameid=gl.gameid\nJOIN genres ge ON gl.genreid=ge.genreid\nWHERE metacritic != -1 AND ge.name!=\"Indie\" AND ge.name!=\"Family\" AND ge.name!=\"Board Games\" AND ge.name!=\"Educational\" AND generation=6\nGROUP BY genre,game,metacritic\nORDER BY g.metacritic DESC").toDF()
+    by_genres.createOrReplaceTempView("by_genres")
+    val q=spark.sql("SELECT genre,first(game) as game FROM by_genres GROUP BY genre ORDER BY game")
+    q.show(40)
+    q.write.mode("overwrite")
+      .json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/results/6")
+  }
   case class Exit() extends Exception
 }
+
+
