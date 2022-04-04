@@ -47,7 +47,6 @@ object Tabletest {
       .getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
     spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
-
     import spark.implicits._
     val a= Seq(("user","password","user"),("admin","adminpassword","admin"),("billy","billypassword","user")).toDF("username","password","role")
     //val users = spark.sparkContext.parallelize(a)
@@ -235,7 +234,7 @@ object Tabletest {
       case "5" => Query5(spark)
       case "6" => Query6(spark)
       case "logout" => state=states.logOut
-      case "pull" => if(currentUserRole=="admin") ReadTables(spark)
+      case "pull" => if(currentUserRole=="admin") CreateTables(spark)
       case _ =>
     }
   }
