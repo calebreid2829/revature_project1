@@ -1,1 +1,1 @@
-"# revature_project1" 
+This was for the Project 1 for Revature's Big Data training. This project pulls data from an API with information on video games, and stores the data as json files on a local hdfs. Those files are then used to create external hive tables on the hdfs to perform analysis on. And then in the end the results of the analysis are exported back to the hdfs as json files once again.
