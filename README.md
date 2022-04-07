@@ -1,42 +1,34 @@
-This was for the Project 1 for Revature's Big Data training. This project pulls data from an API with information on video games, and stores the data as json files on a local hdfs. Those files are then used to create external hive tables on the hdfs to perform analysis on. And then in the end the results of the analysis are exported back to the hdfs as json files once again.
-# PROJECT NAME
+
+# GAMESDB
 
 ## Project Description
 
-Here goes your awesome project description!
+This was for the Project 1 for Revature's Big Data training. This project pulls data from an API with information on video games, and stores the data as json files on a local hdfs. Those files are then used to create external hive tables on the hdfs to perform analysis on. And then in the end the results of the analysis are exported back to the hdfs as json files once again.
 
 ## Technologies Used
 
-* Tech 1 - version 1.0
-* Tech 2 - version 2.0
-* Tech 3 - version 3.0
+* Spark 2.3.0
+* lihaoyi requests 0.7.0
+* lihaoyi ujson 0.7.1
+* Hive 3.1.2
+* Hadoop 3.3.0
 
 ## Features
 
-List of features ready and TODOs for future development
-* Awesome feature 1
-* Awesome feature 2
-* Awesome feature 3
-
-To-do list:
-* Wow improvement to be done 1
-* Wow improvement to be done 2
+* Pulls and formats data from an API
+* Manages external Hive tables on the HDFS
+* Exports analysis results as JSON to the HDFS
 
 ## Getting Started
    
-(include git clone command)
-(include all environment setup steps)
-
-> Be sure to include BOTH Windows and Unix command  
-> Be sure to mention if the commands only work on a specific platform (eg. AWS, GCP)
-
-- All the `code` required to get started
-- Images of what it should look like
+-git clone https://github.com/calebreid2829/revature_project1.git
+-If on Windows set up a WSL2 environment: https://docs.microsoft.com/en-us/windows/wsl/install
+-In the WSL2 environment or Linux system create a Hadoop cluster: https://kontext.tech/column/hadoop/445/install-hadoop-330-on-windows-10-using-wsl
+-In the newely created HDFS create the following directories: /user/hive/warehouse/gamesdb
+-When you first run the program choose first time set up to download the data from the API
+-You are now all set!
 
 ## Usage
 
-> Here, you instruct other people on how to use your project after they’ve installed it. This would also be a good place to include screenshots of your project in action.
-
-## License
-
-This project uses the following license: [<license_name>](<link>).
+-Either create a new account or log into an existing one, (as this was just a project for training the user info is shown at start up).
+-Then choose which of the analysis options you would like to perform to see the results
