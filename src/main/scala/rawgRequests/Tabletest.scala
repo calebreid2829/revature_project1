@@ -7,6 +7,7 @@ import rawgRequests.states.states
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql.functions.{col, when}
+import java.io.PrintWriter
 
 import scala.io.StdIn.readLine
 import scala.util.Random
@@ -55,10 +56,21 @@ object Tabletest {
     spark.sql("DROP TABLE IF EXISTS users")
     spark.sql("CREATE TABLE users(username String,password String,role String)")
     spark.sql("INSERT INTO users (SELECT username,password,role FROM users2)")
+    spark.sql("SELECT * FROM users").show()
     //val users = spark.read.json("hdfs://localhost:9000/user/hive/warehouse/gamesdb/users").toDF()
     //users.createOrReplaceTempView("users")
     var loop = true
     //UserTable(spark)
+    do {
+      println("Would you like to perform first time set up?\n[y] [n]")
+      val line = readLine()
+      if(line=="y"){
+        CreateTables(spark)
+        loop = false
+      }
+      else if(line=="n")loop = false
+    }while(loop)
+    loop = true
     do{
       state match{
         case states.main => MainMenu()
@@ -94,6 +106,12 @@ object Tabletest {
     val tmpgames = spark.createDataFrame(games).toDF("gameid", "name", "release_date", "metacritic", "esrb", "generation", "platform")
     val tmpgl = spark.createDataFrame(gl).toDF("gameid", "genreid")
     val tmpge = spark.createDataFrame(ge).toDF("genreid", "name")
+    val tmppl = spark.read.format("csv")
+      .option("delimiter",",")
+      .option("header","true")
+      .option("inferSchema","true")
+      .load("platforms.csv").toDF()
+    tmppl.createOrReplaceTempView("tmppl")
 
     /*tmpgames.write.partitionBy("generation","platform")
       .mode("overwrite")
@@ -117,6 +135,9 @@ object Tabletest {
     spark.sql("DROP TABLE IF EXISTS genrelinks")
     spark.sql("CREATE EXTERNAL TABLE genrelinks(gameid Int,genreid Int) LOCATION 'hdfs://localhost:9000/user/hive/warehouse/gamesdb/genrelinks'")
     spark.sql("INSERT INTO genrelinks(SELECT gameid,genreid FROM tmpgl)")
+    spark.sql("DROP TABLE IF EXISTS platforms")
+    spark.sql("CREATE EXTERNAL TABLE platforms(name String,generation Int,start Int,end Int) LOCATION 'hdfs://localhost:9000/user/hive/warehouse/gamesdb/platforms'")
+    spark.sql("INSERT INTO platforms(SELECT name,generation,start,end FROM tmppl)")
     spark.sql("SELECT platform, COUNT(name) FROM games WHERE generation=6 GROUP BY platform").show()
     spark.sql("SELECT * FROM genres").show()
     spark.sql("SELECT COUNT(gameid) FROM genrelinks").show()
@@ -234,7 +255,6 @@ object Tabletest {
       case "5" => Query5(spark)
       case "6" => Query6(spark)
       case "logout" => state=states.logOut
-      case "pull" => if(currentUserRole=="admin") CreateTables(spark)
       case _ =>
     }
   }
